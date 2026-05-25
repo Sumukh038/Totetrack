@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#111111" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="ToteTrack" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <title>ToteTrack</title>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #111;
+      min-height: 100dvh;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: #111;
+      color: #fff;
+      padding: 14px 16px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 { font-size: 17px; font-weight: 600; }
+    .header .mode-label {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+    .mode-label.dispatch { background: #E24B4A; color: #fff; }
+    .mode-label.return   { background: #3B6D11; color: #fff; }
+
+    /* ── Mode toggle ── */
+    .mode-toggle {
+      display: flex;
+      margin: 12px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #ddd;
+      background: #eee;
+    }
+    .mode-toggle button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: transparent;
+      color: #666;
+      transition: background 0.2s, color 0.2s;
+    }
+    .mode-toggle button.active-d { background: #E24B4A; color: #fff; border-radius: 9px; }
+    .mode-toggle button.active-r { background: #3B6D11; color: #fff; border-radius: 9px; }
+
+    /* ── Scanner ── */
+    .scanner-wrap {
+      margin: 0 12px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+      position: relative;
+      aspect-ratio: 1 / 1;
+    }
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    #canvas { display: none; }
+    .scan-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .scan-box {
+      width: 55%;
+      height: 55%;
+      position: relative;
+    }
+    .corner {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+    }
+    .corner.tl { top: 0; left: 0;  border-top: 3px solid #E24B4A; border-left: 3px solid #E24B4A;  border-radius: 4px 0 0 0; }
+    .corner.tr { top: 0; right: 0; border-top: 3px solid #E24B4A; border-right: 3px solid #E24B4A; border-radius: 0 4px 0 0; }
+    .corner.bl { bottom: 0; left: 0;  border-bottom: 3px solid #E24B4A; border-left: 3px solid #E24B4A;  border-radius: 0 0 0 4px; }
+    .corner.br { bottom: 0; right: 0; border-bottom: 3px solid #E24B4A; border-right: 3px solid #E24B4A; border-radius: 0 0 4px 0; }
+    .scan-line {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: #E24B4A;
+      animation: sweep 2s linear infinite;
+    }
+    @keyframes sweep { 0% { top: 5%; } 100% { top: 95%; } }
+
+    .scanner-hint {
+      text-align: center;
+      font-size: 12px;
+      color: #777;
+      margin: 8px 0 4px;
+    }
+
+    /* Camera start button overlay */
+    .cam-start {
+      position: absolute;
+      inset: 0;
+      background: #1a1a1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+    .cam-start svg { width: 48px; height: 48px; fill: none; stroke: #aaa; stroke-width: 1.5; }
+    .cam-start p { color: #aaa; font-size: 13px; }
+    .cam-start button {
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* Scanned badge */
+    .scanned-badge {
+      display: none;
+      margin: 10px 12px 0;
+      padding: 10px 14px;
+      background: #EAF3DE;
+      border: 1px solid #97C459;
+      border-radius: 10px;
+      align-items: center;
+      gap: 10px;
+    }
+    .scanned-badge.visible { display: flex; }
+    .scanned-badge .tid { font-size: 18px; font-weight: 700; color: #27500A; }
+    .scanned-badge .sub { font-size: 11px; color: #3B6D11; }
+    .scanned-badge .clr {
+      margin-left: auto;
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: #3B6D11;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    /* ── Or divider ── */
+    .or-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 12px 12px 8px;
+      font-size: 12px;
+      color: #aaa;
+    }
+    .or-row::before, .or-row::after { content: ''; flex: 1; height: 1px; background: #ddd; }
+
+    /* ── Manual input ── */
+    .manual-row {
+      display: flex;
+      gap: 8px;
+      margin: 0 12px;
+    }
+    .manual-row input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+      text-transform: uppercase;
+    }
+    .manual-row input:focus { outline: none; border-color: #888; }
+    .manual-row button {
+      padding: 10px 16px;
+      background: #111;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* ── Form fields ── */
+    .form-section { margin: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .field label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 500; }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+      color: #111;
+    }
+    .field input:focus, .field select:focus { outline: none; border-color: #888; }
+
+    /* ── Submit button ── */
+    .submit-btn {
+      margin: 4px 12px 12px;
+      width: calc(100% - 24px);
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .submit-btn:active { opacity: 0.85; transform: scale(0.98); }
+    .submit-btn.dispatch-btn { background: #E24B4A; color: #fff; }
+    .submit-btn.return-btn  { background: #3B6D11; color: #fff; }
+    .submit-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+    /* ── Result toast ── */
+    .result-card {
+      display: none;
+      margin: 0 12px 12px;
+      padding: 12px 14px;
+      border-radius: 10px;
+    }
+    .result-card.show { display: block; }
+    .result-card.ok  { background: #EAF3DE; border: 1px solid #97C459; }
+    .result-card.err { background: #FCEBEB; border: 1px solid #F09595; }
+    .result-card .rt { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+    .result-card .rb { font-size: 13px; white-space: pre-line; }
+    .result-card.ok .rt, .result-card.ok .rb { color: #27500A; }
+    .result-card.err .rt, .result-card.err .rb { color: #791F1F; }
+
+    /* ── Offline banner ── */
+    .offline-banner {
+      display: none;
+      background: #BA7517;
+      color: #fff;
+      text-align: center;
+      font-size: 12px;
+      padding: 6px;
+      font-weight: 500;
+    }
+    .offline-banner.show { display: block; }
+
+    /* ── Bottom nav ── */
+    .bottom-nav {
+      display: flex;
+      border-top: 1px solid #e0e0e0;
+      background: #fff;
+      margin-top: 8px;
+    }
+    .nav-btn {
+      flex: 1;
+      padding: 12px 0 8px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      color: #aaa;
+    }
+    .nav-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .nav-btn.active { color: #185FA5; }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner.show { display: inline-block; }
+  </style>
+</head>
+<body>
+
+<!-- Offline banner -->
+<div class="offline-banner" id="offline-banner">
+  You are offline — scans will be saved and submitted when you reconnect
+</div>
+
+<!-- Header -->
+<div class="header">
+  <h1>📦 ToteTrack</h1>
+  <span class="mode-label dispatch" id="mode-label">Dispatch</span>
+</div>
+
+<!-- Mode toggle -->
+<div class="mode-toggle">
+  <button id="btn-d" class="active-d" onclick="setMode('dispatch')">⬆ Dispatch</button>
+  <button id="btn-r" onclick="setMode('return')">⬇ Return</button>
+</div>
+
+<!-- Scanner -->
+<div class="scanner-wrap">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+
+  <!-- Camera start overlay (shown initially) -->
+  <div class="cam-start" id="cam-start">
+    <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    <p>Tap to start camera</p>
+    <button onclick="startCamera()">Start QR scanner</button>
+  </div>
+
+  <!-- Scan overlay corners -->
+  <div class="scan-overlay" id="scan-overlay" style="display:none">
+    <div class="scan-box">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="scan-line" id="scan-line"></div>
+    </div>
+  </div>
+</div>
+<p class="scanner-hint">Point at the QR code on the tote box</p>
+
+<!-- Scanned tote badge -->
+<div class="scanned-badge" id="scanned-badge">
+  <div>
+    <div class="sub">Tote detected</div>
+    <div class="tid" id="tote-id-display">TB001</div>
+  </div>
+  <button class="clr" onclick="clearScan()" aria-label="Clear">×</button>
+</div>
+
+<!-- Manual fallback -->
+<div class="or-row">or type manually</div>
+<div class="manual-row">
+  <input type="text" id="manual-input" placeholder="e.g. TB007" maxlength="10" autocomplete="off" />
+  <button onclick="useManual()">Use</button>
+</div>
+
+<!-- Dispatch form -->
+<div class="form-section" id="dispatch-form">
+  <div class="field">
+    <label>Destination — vending machine ID</label>
+    <input type="text" id="d-dest" placeholder="e.g. VM-Koramangala-03" autocomplete="off" />
+  </div>
+  <div class="field">
+    <label>Driver / associate name</label>
+    <input type="text" id="d-driver" placeholder="Your full name" autocomplete="name" />
+  </div>
+  <div class="field">
+    <label>Contents (optional)</label>
+    <input type="text" id="d-contents" placeholder="e.g. Chips mix, 60 units" />
+  </div>
+</div>
+
+<!-- Return form -->
+<div class="form-section" id="return-form" style="display:none">
+  <div class="field">
+    <label>Warehouse associate name</label>
+    <input type="text" id="r-assoc" placeholder="Your full name" autocomplete="name" />
+  </div>
+  <div class="field">
+    <label>Condition on return</label>
+    <select id="r-cond">
+      <option value="Good">Good — no damage</option>
+      <option value="Minor damage">Minor damage — still usable</option>
+      <option value="Needs repair">Needs repair — take out of rotation</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Notes (optional)</label>
+    <input type="text" id="r-notes" placeholder="Any issues to flag?" />
+  </div>
+</div>
+
+<!-- Submit button -->
+<button class="submit-btn dispatch-btn" id="submit-btn" onclick="submitScan()">
+  <div class="spinner" id="spinner"></div>
+  <span id="submit-label">Record dispatch</span>
+</button>
+
+<!-- Result card -->
+<div class="result-card" id="result-card">
+  <div class="rt" id="result-title"></div>
+  <div class="rb" id="result-body"></div>
+</div>
+
+<!-- Bottom nav -->
+<div class="bottom-nav">
+  <button class="nav-btn active" onclick="alert('You are on the Scan screen')">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Scan
+  </button>
+  <button class="nav-btn" onclick="showHistory()">
+    <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
+    History
+  </button>
+  <button class="nav-btn" onclick="showPending()">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+    Pending
+  </button>
+</div>
+
+<!-- jsQR library for reading QR codes from camera -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+<script>
+  // ─────────────────────────────────────────────────────────────────
+  //  CONFIGURATION — paste your Apps Script URL here after deploying
+  // ─────────────────────────────────────────────────────────────────
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz7vBbD7UEsc2_HqFsTRLTnzIUdy-ECCy5KCRP3jFWnT3ppq7iRc69TZu3t7XkU-cOh/exec';
+  // Example: 'https://script.google.com/macros/s/AKfyc.../exec'
+
+  // ─────────────────────────────────────────────────────────────────
+  //  STATE
+  // ─────────────────────────────────────────────────────────────────
+  let currentMode = 'dispatch';
+  let scannedId   = '';
+  let scanning    = false;
+  let animFrame   = null;
+  let lastScan    = 0;
+  let pendingQueue = JSON.parse(localStorage.getItem('tote_pending') || '[]');
+
+  // ─────────────────────────────────────────────────────────────────
+  //  MODE TOGGLE
+  // ─────────────────────────────────────────────────────────────────
+  function setMode(mode) {
+    currentMode = mode;
+    const isD = mode === 'dispatch';
+    document.getElementById('btn-d').className = isD ? 'active-d' : '';
+    document.getElementById('btn-r').className = isD ? '' : 'active-r';
+    document.getElementById('mode-label').textContent = isD ? 'Dispatch' : 'Return';
+    document.getElementById('mode-label').className = 'mode-label ' + (isD ? 'dispatch' : 'return');
+    document.getElementById('dispatch-form').style.display = isD ? 'flex' : 'none';
+    document.getElementById('return-form').style.display   = isD ? 'none'  : 'flex';
+    const sb = document.getElementById('submit-btn');
+    sb.className = 'submit-btn ' + (isD ? 'dispatch-btn' : 'return-btn');
+    document.getElementById('submit-label').textContent = isD ? 'Record dispatch' : 'Record return';
+    const sl = document.getElementById('scan-line');
+    sl.style.background = isD ? '#E24B4A' : '#3B6D11';
+    document.querySelectorAll('.corner').forEach(c => {
+      c.style.borderColor = isD ? '#E24B4A' : '#3B6D11';
+    });
+    hideResult();
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  CAMERA + QR SCANNING
+  // ─────────────────────────────────────────────────────────────────
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      const video = document.getElementById('video');
+      video.srcObject = stream;
+      await video.play();
+      document.getElementById('cam-start').style.display = 'none';
+      document.getElementById('scan-overlay').style.display = 'flex';
+      scanning = true;
+      animFrame = requestAnimationFrame(scanFrame);
+    } catch (err) {
+      alert('Camera access denied. Please allow camera in your browser settings, or use manual entry below.');
+    }
+  }
+
+  function scanFrame() {
+    if (!scanning) return;
+    const video  = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      animFrame = requestAnimationFrame(scanFrame);
+      return;
+    }
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: 'dontInvert'
+    });
+    const now = Date.now();
+    if (code && now - lastScan > 3000) {
+      lastScan = now;
+      onQRDetected(code.data.trim().toUpperCase());
+    }
+    animFrame = requestAnimationFrame(scanFrame);
+  }
+
+  function onQRDetected(id) {
+    if (!id.startsWith('TB')) {
+      showResult('err', 'Unrecognised QR code', 'This QR code does not look like a tote ID. Expected format: TB001');
+      return;
+    }
+    navigator.vibrate && navigator.vibrate(80);
+    scannedId = id;
+    document.getElementById('tote-id-display').textContent = id;
+    document.getElementById('scanned-badge').classList.add('visible');
+    hideResult();
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  MANUAL ENTRY
+  // ─────────────────────────────────────────────────────────────────
+  function useManual() {
+    const val = document.getElementById('manual-input').value.trim().toUpperCase();
+    if (!val) { alert('Please type a tote ID first.'); return; }
+    onQRDetected(val);
+    document.getElementById('manual-input').value = '';
+  }
+
+  document.getElementById('manual-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') useManual();
+  });
+
+  function clearScan() {
+    scannedId = '';
+    document.getElementById('scanned-badge').classList.remove('visible');
+    hideResult();
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  SUBMIT
+  // ─────────────────────────────────────────────────────────────────
+  async function submitScan() {
+    if (!scannedId) {
+      showResult('err', 'No tote scanned', 'Please scan a QR code or type a tote ID first.');
+      return;
+    }
+
+    const timestamp = new Date().toLocaleString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+
+    let payload = { action: currentMode, toteId: scannedId, timestamp };
+
+    if (currentMode === 'dispatch') {
+      const dest   = document.getElementById('d-dest').value.trim();
+      const driver = document.getElementById('d-driver').value.trim();
+      if (!dest || !driver) {
+        showResult('err', 'Missing details', 'Please fill in the destination and your name before submitting.');
+        return;
+      }
+      payload = { ...payload, destination: dest, driver, contents: document.getElementById('d-contents').value.trim() };
+    } else {
+      const assoc = document.getElementById('r-assoc').value.trim();
+      if (!assoc) {
+        showResult('err', 'Missing name', 'Please enter your name before submitting.');
+        return;
+      }
+      payload = { ...payload, associate: assoc, condition: document.getElementById('r-cond').value, notes: document.getElementById('r-notes').value.trim() };
+    }
+
+    setLoading(true);
+
+    if (!navigator.onLine || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
+      savePending(payload);
+      setLoading(false);
+      const msg = APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE'
+        ? 'Apps Script URL not set yet. Scan saved locally.\n\nTimestamp: ' + timestamp
+        : 'You are offline. Scan saved locally and will upload automatically when you reconnect.\n\nTimestamp: ' + timestamp;
+      showResult('ok', 'Saved locally', msg);
+      clearScan();
+      return;
+    }
+
+    try {
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      setLoading(false);
+      const label = currentMode === 'dispatch' ? 'Dispatch recorded' : 'Return recorded';
+      const detail = currentMode === 'dispatch'
+        ? `${scannedId} → ${payload.destination}\nDriver: ${payload.driver}\nTime: ${timestamp}`
+        : `${scannedId} returned\nBy: ${payload.associate}\nCondition: ${payload.condition}\nTime: ${timestamp}`;
+      showResult('ok', '✓ ' + label, detail);
+      clearScan();
+      clearForm();
+    } catch (err) {
+      setLoading(false);
+      savePending(payload);
+      showResult('ok', 'Saved offline', 'Could not reach server. Scan saved and will retry automatically.\n\n' + timestamp);
+      clearScan();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  OFFLINE QUEUE
+  // ─────────────────────────────────────────────────────────────────
+  function savePending(payload) {
+    pendingQueue.push(payload);
+    localStorage.setItem('tote_pending', JSON.stringify(pendingQueue));
+  }
+
+  async function flushPending() {
+    if (!navigator.onLine || pendingQueue.length === 0 || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+    const batch = [...pendingQueue];
+    for (const item of batch) {
+      try {
+        await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+        pendingQueue = pendingQueue.filter(p => p !== item);
+      } catch (_) {}
+    }
+    localStorage.setItem('tote_pending', JSON.stringify(pendingQueue));
+  }
+
+  window.addEventListener('online',  () => { document.getElementById('offline-banner').classList.remove('show'); flushPending(); });
+  window.addEventListener('offline', () => document.getElementById('offline-banner').classList.add('show'));
+  if (!navigator.onLine) document.getElementById('offline-banner').classList.add('show');
+
+  // ─────────────────────────────────────────────────────────────────
+  //  UI HELPERS
+  // ─────────────────────────────────────────────────────────────────
+  function showResult(type, title, body) {
+    const rc = document.getElementById('result-card');
+    rc.className = 'result-card show ' + type;
+    document.getElementById('result-title').textContent = title;
+    document.getElementById('result-body').textContent  = body;
+    rc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function hideResult() {
+    document.getElementById('result-card').className = 'result-card';
+  }
+  function setLoading(on) {
+    document.getElementById('spinner').className = on ? 'spinner show' : 'spinner';
+    document.getElementById('submit-btn').disabled = on;
+    document.getElementById('submit-label').textContent = on
+      ? 'Submitting…'
+      : (currentMode === 'dispatch' ? 'Record dispatch' : 'Record return');
+  }
+  function clearForm() {
+    ['d-dest','d-driver','d-contents','r-assoc','r-notes'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  }
+
+  function showHistory() {
+    const items = JSON.parse(localStorage.getItem('tote_pending') || '[]');
+    if (items.length === 0) { alert('No locally saved scans.'); return; }
+    const lines = items.map((i, n) => `${n+1}. ${i.toteId} — ${i.action} — ${i.timestamp}`).join('\n');
+    alert('Locally saved scans:\n\n' + lines + '\n\nThese will upload when you reconnect.');
+  }
+
+  function showPending() {
+    alert('Pending uploads: ' + pendingQueue.length + ' scan(s) waiting to sync.');
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  SERVICE WORKER REGISTRATION
+  // ─────────────────────────────────────────────────────────────────
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
