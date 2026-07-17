@@ -365,11 +365,15 @@
 <div class="form-section" id="dispatch-form">
   <div class="field">
     <label>Destination — vending machine ID</label>
-    <input type="text" id="d-dest" placeholder="e.g. VM-Koramangala-03" autocomplete="off" />
+    <select id="d-dest">
+      <option value="">Select destination…</option>
+    </select>
   </div>
   <div class="field">
     <label>Driver / associate name</label>
-    <input type="text" id="d-driver" placeholder="Your full name" autocomplete="name" />
+    <select id="d-driver">
+      <option value="">Select driver…</option>
+    </select>
   </div>
   <div class="field">
     <label>Contents (optional)</label>
@@ -381,7 +385,9 @@
 <div class="form-section" id="return-form" style="display:none">
   <div class="field">
     <label>Warehouse associate name</label>
-    <input type="text" id="r-assoc" placeholder="Your full name" autocomplete="name" />
+    <select id="r-assoc">
+      <option value="">Select associate…</option>
+    </select>
   </div>
   <div class="field">
     <label>Condition on return</label>
@@ -444,6 +450,7 @@
   let animFrame   = null;
   let lastScan    = 0;
   let pendingQueue = JSON.parse(localStorage.getItem('tote_pending') || '[]');
+  let toteConfig   = JSON.parse(localStorage.getItem('tote_config') || '{"destinations":[],"drivers":[],"associates":[],"toteIds":[]}');
 
   // ─────────────────────────────────────────────────────────────────
   //  MODE TOGGLE
@@ -467,6 +474,49 @@
     });
     hideResult();
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  DROPDOWN CONFIG (destinations / drivers / associates / tote IDs)
+  //  Pulled from the "Config" tab in your Google Sheet — see appsscript.gs
+  // ─────────────────────────────────────────────────────────────────
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  }
+
+  function fillSelect(id, items, placeholder) {
+    const sel = document.getElementById(id);
+    const current = sel.value;
+    sel.innerHTML = '<option value="">' + placeholder + '</option>' +
+      items.map(i => `<option value="${escapeHtml(i)}">${escapeHtml(i)}</option>`).join('');
+    if (items.indexOf(current) !== -1) sel.value = current;
+  }
+
+  function populateDropdowns(config) {
+    fillSelect('d-dest',   config.destinations || [], 'Select destination…');
+    fillSelect('d-driver', config.drivers      || [], 'Select driver…');
+    fillSelect('r-assoc',  config.associates   || [], 'Select associate…');
+  }
+
+  async function loadConfig() {
+    // Show whatever we already have cached, immediately (works offline)
+    populateDropdowns(toteConfig);
+
+    if (APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+
+    try {
+      const res  = await fetch(APPS_SCRIPT_URL); // GET request → runs doGet()
+      const json = await res.json();
+      if (json.status === 'ok' && json.config) {
+        toteConfig = json.config;
+        localStorage.setItem('tote_config', JSON.stringify(toteConfig));
+        populateDropdowns(toteConfig);
+      }
+    } catch (err) {
+      // Offline or unreachable — the cached list from last time is still shown
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', loadConfig);
 
   // ─────────────────────────────────────────────────────────────────
   //  CAMERA + QR SCANNING
@@ -515,6 +565,12 @@
   function onQRDetected(id) {
     if (!id.startsWith('TB')) {
       showResult('err', 'Unrecognised QR code', 'This QR code does not look like a tote ID. Expected format: TB001');
+      return;
+    }
+    // Check against the master tote list from the Config sheet (if one has been set up)
+    const masterList = toteConfig.toteIds || [];
+    if (masterList.length > 0 && masterList.indexOf(id) === -1) {
+      showResult('err', 'Tote ID not recognised', `"${id}" is not on the master tote list. Check the code and try again.`);
       return;
     }
     navigator.vibrate && navigator.vibrate(80);
@@ -591,13 +647,29 @@
     }
 
     try {
+      // NOTE: Content-Type is 'text/plain' on purpose (not 'application/json').
+      // This avoids a CORS "preflight" request that Apps Script can't answer.
+      // Apps Script still reads the raw body fine in doPost via e.postData.contents.
       const res = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
+      const result = await res.json();
       setLoading(false);
+
+      if (result.status === 'duplicate') {
+        showResult('err', 'Already dispatched', result.message);
+        return; // keep the scanned tote on screen so they can fix it
+      }
+      if (result.status === 'invalid_tote') {
+        showResult('err', 'Tote ID not recognised', result.message);
+        return;
+      }
+      if (result.status === 'error') {
+        throw new Error(result.message || 'Server error');
+      }
+
       const label = currentMode === 'dispatch' ? 'Dispatch recorded' : 'Return recorded';
       const detail = currentMode === 'dispatch'
         ? `${scannedId} → ${payload.destination}\nDriver: ${payload.driver}\nTime: ${timestamp}`
@@ -626,7 +698,11 @@
     const batch = [...pendingQueue];
     for (const item of batch) {
       try {
-        await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+        const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(item) });
+        const result = await res.json();
+        // Whether it succeeded, was a duplicate, or was an invalid tote ID,
+        // remove it from the queue — retrying those forever won't help.
+        // Only a genuine network failure (caught below) leaves it queued.
         pendingQueue = pendingQueue.filter(p => p !== item);
       } catch (_) {}
     }
