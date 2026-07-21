@@ -21,6 +21,73 @@
       min-height: 100dvh;
     }
 
+    /* ── Login screen ── */
+    .login-screen {
+      position: fixed;
+      inset: 0;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+    .login-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 32px 24px;
+      width: 100%;
+      max-width: 340px;
+      text-align: center;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    }
+    .login-logo { font-size: 40px; margin-bottom: 8px; }
+    .login-card h1 { font-size: 20px; margin-bottom: 4px; }
+    .login-sub { font-size: 13px; color: #777; margin-bottom: 22px; }
+    .login-card .field { text-align: left; margin-bottom: 14px; }
+    .login-card .field label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 500; }
+    .login-card .field input {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      background: #fff;
+      color: #111;
+    }
+    .login-card .field input:focus { outline: none; border-color: #888; }
+    .login-btn {
+      width: 100%;
+      padding: 12px;
+      background: #111;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .login-btn:active { opacity: 0.85; transform: scale(0.98); }
+    .login-btn:disabled { background: #999; cursor: not-allowed; }
+    .login-error {
+      display: none;
+      margin-top: 14px;
+      color: #791F1F;
+      font-size: 13px;
+      background: #FCEBEB;
+      border: 1px solid #F09595;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: left;
+      white-space: pre-line;
+    }
+    .login-hint { margin-top: 18px; font-size: 11px; color: #aaa; }
+
     /* ── Header ── */
     .header {
       background: #111;
@@ -29,16 +96,42 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
     }
-    .header h1 { font-size: 17px; font-weight: 600; }
+    .header h1 { font-size: 17px; font-weight: 600; white-space: nowrap; }
+    .header-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .header .mode-label {
       font-size: 11px;
       padding: 3px 10px;
       border-radius: 20px;
       font-weight: 500;
+      white-space: nowrap;
     }
     .mode-label.dispatch { background: #E24B4A; color: #fff; }
     .mode-label.return   { background: #3B6D11; color: #fff; }
+    .user-badge {
+      font-size: 11px;
+      color: #ccc;
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .logout-btn {
+      background: none;
+      border: 1px solid #444;
+      color: #fff;
+      border-radius: 6px;
+      width: 30px;
+      height: 30px;
+      font-size: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logout-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
     /* ── Mode toggle ── */
     .mode-toggle {
@@ -303,133 +396,176 @@
 </head>
 <body>
 
-<!-- Offline banner -->
-<div class="offline-banner" id="offline-banner">
-  You are offline — scans will be saved and submitted when you reconnect
+<!-- ══════════════════════════════════════════════════════════════
+     LOGIN SCREEN — shown before the app is accessible.
+     Hidden automatically once a valid session is established.
+     ══════════════════════════════════════════════════════════════ -->
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">📦</div>
+    <h1>ToteTrack</h1>
+    <p class="login-sub">Sign in to continue</p>
+
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="login-username" autocomplete="username" autocapitalize="none" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="login-password" autocomplete="current-password" />
+    </div>
+
+    <button class="login-btn" id="login-btn" onclick="handleLogin()">
+      <div class="spinner" id="login-spinner"></div>
+      <span id="login-btn-label">Log in</span>
+    </button>
+
+    <div class="login-error" id="login-error"></div>
+    <p class="login-hint">Contact your admin if you don't have an account.</p>
+  </div>
 </div>
 
-<!-- Header -->
-<div class="header">
-  <h1>📦 ToteTrack</h1>
-  <span class="mode-label dispatch" id="mode-label">Dispatch</span>
-</div>
+<!-- ══════════════════════════════════════════════════════════════
+     APP ROOT — everything below is the original app, unchanged,
+     just wrapped so it can be hidden until the user logs in.
+     ══════════════════════════════════════════════════════════════ -->
+<div id="app-root" style="display:none">
 
-<!-- Mode toggle -->
-<div class="mode-toggle">
-  <button id="btn-d" class="active-d" onclick="setMode('dispatch')">⬆ Dispatch</button>
-  <button id="btn-r" onclick="setMode('return')">⬇ Return</button>
-</div>
-
-<!-- Scanner -->
-<div class="scanner-wrap">
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="canvas"></canvas>
-
-  <!-- Camera start overlay (shown initially) -->
-  <div class="cam-start" id="cam-start">
-    <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-    <p>Tap to start camera</p>
-    <button onclick="startCamera()">Start QR scanner</button>
+  <!-- Offline banner -->
+  <div class="offline-banner" id="offline-banner">
+    You are offline — scans will be saved and submitted when you reconnect
   </div>
 
-  <!-- Scan overlay corners -->
-  <div class="scan-overlay" id="scan-overlay" style="display:none">
-    <div class="scan-box">
-      <div class="corner tl"></div>
-      <div class="corner tr"></div>
-      <div class="corner bl"></div>
-      <div class="corner br"></div>
-      <div class="scan-line" id="scan-line"></div>
+  <!-- Header -->
+  <div class="header">
+    <h1>📦 ToteTrack</h1>
+    <div class="header-right">
+      <span class="mode-label dispatch" id="mode-label">Dispatch</span>
+      <span class="user-badge" id="user-badge" title="Logged in as"></span>
+      <button class="logout-btn" onclick="handleLogout()" title="Log out" aria-label="Log out">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+      </button>
     </div>
   </div>
-</div>
-<p class="scanner-hint">Point at the QR code on the tote box</p>
 
-<!-- Scanned tote badge -->
-<div class="scanned-badge" id="scanned-badge">
-  <div>
-    <div class="sub">Tote detected</div>
-    <div class="tid" id="tote-id-display">TB001</div>
+  <!-- Mode toggle -->
+  <div class="mode-toggle">
+    <button id="btn-d" class="active-d" onclick="setMode('dispatch')">⬆ Dispatch</button>
+    <button id="btn-r" onclick="setMode('return')">⬇ Return</button>
   </div>
-  <button class="clr" onclick="clearScan()" aria-label="Clear">×</button>
-</div>
 
-<!-- Manual fallback -->
-<div class="or-row">or type manually</div>
-<div class="manual-row">
-  <input type="text" id="manual-input" placeholder="e.g. TB007" maxlength="10" autocomplete="off" />
-  <button onclick="useManual()">Use</button>
-</div>
+  <!-- Scanner -->
+  <div class="scanner-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
 
-<!-- Dispatch form -->
-<div class="form-section" id="dispatch-form">
-  <div class="field">
-    <label>Destination — vending machine ID</label>
-    <select id="d-dest">
-      <option value="">Select destination…</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>Driver / associate name</label>
-    <select id="d-driver">
-      <option value="">Select driver…</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>Contents (optional)</label>
-    <input type="text" id="d-contents" placeholder="e.g. Chips mix, 60 units" />
-  </div>
-</div>
+    <!-- Camera start overlay (shown initially) -->
+    <div class="cam-start" id="cam-start">
+      <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <p>Tap to start camera</p>
+      <button onclick="startCamera()">Start QR scanner</button>
+    </div>
 
-<!-- Return form -->
-<div class="form-section" id="return-form" style="display:none">
-  <div class="field">
-    <label>Warehouse associate name</label>
-    <select id="r-assoc">
-      <option value="">Select associate…</option>
-    </select>
+    <!-- Scan overlay corners -->
+    <div class="scan-overlay" id="scan-overlay" style="display:none">
+      <div class="scan-box">
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+        <div class="scan-line" id="scan-line"></div>
+      </div>
+    </div>
   </div>
-  <div class="field">
-    <label>Condition on return</label>
-    <select id="r-cond">
-      <option value="Good">Good — no damage</option>
-      <option value="Minor damage">Minor damage — still usable</option>
-      <option value="Needs repair">Needs repair — take out of rotation</option>
-    </select>
+  <p class="scanner-hint">Point at the QR code on the tote box</p>
+
+  <!-- Scanned tote badge -->
+  <div class="scanned-badge" id="scanned-badge">
+    <div>
+      <div class="sub">Tote detected</div>
+      <div class="tid" id="tote-id-display">TB001</div>
+    </div>
+    <button class="clr" onclick="clearScan()" aria-label="Clear">×</button>
   </div>
-  <div class="field">
-    <label>Notes (optional)</label>
-    <input type="text" id="r-notes" placeholder="Any issues to flag?" />
+
+  <!-- Manual fallback -->
+  <div class="or-row">or type manually</div>
+  <div class="manual-row">
+    <input type="text" id="manual-input" placeholder="e.g. TB007" maxlength="10" autocomplete="off" />
+    <button onclick="useManual()">Use</button>
   </div>
-</div>
 
-<!-- Submit button -->
-<button class="submit-btn dispatch-btn" id="submit-btn" onclick="submitScan()">
-  <div class="spinner" id="spinner"></div>
-  <span id="submit-label">Record dispatch</span>
-</button>
+  <!-- Dispatch form -->
+  <div class="form-section" id="dispatch-form">
+    <div class="field">
+      <label>Destination — vending machine ID</label>
+      <select id="d-dest">
+        <option value="">Select destination…</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Driver / associate name</label>
+      <select id="d-driver">
+        <option value="">Select driver…</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Contents (optional)</label>
+      <input type="text" id="d-contents" placeholder="e.g. Chips mix, 60 units" />
+    </div>
+  </div>
 
-<!-- Result card -->
-<div class="result-card" id="result-card">
-  <div class="rt" id="result-title"></div>
-  <div class="rb" id="result-body"></div>
-</div>
+  <!-- Return form -->
+  <div class="form-section" id="return-form" style="display:none">
+    <div class="field">
+      <label>Warehouse associate name</label>
+      <select id="r-assoc">
+        <option value="">Select associate…</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Condition on return</label>
+      <select id="r-cond">
+        <option value="Good">Good — no damage</option>
+        <option value="Minor damage">Minor damage — still usable</option>
+        <option value="Needs repair">Needs repair — take out of rotation</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <input type="text" id="r-notes" placeholder="Any issues to flag?" />
+    </div>
+  </div>
 
-<!-- Bottom nav -->
-<div class="bottom-nav">
-  <button class="nav-btn active" onclick="alert('You are on the Scan screen')">
-    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-    Scan
+  <!-- Submit button -->
+  <button class="submit-btn dispatch-btn" id="submit-btn" onclick="submitScan()">
+    <div class="spinner" id="spinner"></div>
+    <span id="submit-label">Record dispatch</span>
   </button>
-  <button class="nav-btn" onclick="showHistory()">
-    <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
-    History
-  </button>
-  <button class="nav-btn" onclick="showPending()">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-    Pending
-  </button>
-</div>
+
+  <!-- Result card -->
+  <div class="result-card" id="result-card">
+    <div class="rt" id="result-title"></div>
+    <div class="rb" id="result-body"></div>
+  </div>
+
+  <!-- Bottom nav -->
+  <div class="bottom-nav">
+    <button class="nav-btn active" onclick="alert('You are on the Scan screen')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Scan
+    </button>
+    <button class="nav-btn" onclick="showHistory()">
+      <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
+      History
+    </button>
+    <button class="nav-btn" onclick="showPending()">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      Pending
+    </button>
+  </div>
+
+</div><!-- /#app-root -->
 
 <!-- jsQR library for reading QR codes from camera -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -451,6 +587,171 @@
   let lastScan    = 0;
   let pendingQueue = JSON.parse(localStorage.getItem('tote_pending') || '[]');
   let toteConfig   = JSON.parse(localStorage.getItem('tote_config') || '{"destinations":[],"drivers":[],"associates":[],"toteIds":[]}');
+
+  // ════════════════════════════════════════════════════════════════
+  //  AUTHENTICATION MODULE
+  //  Self-contained login / logout / session-restore logic. This is
+  //  the only part of the app that touches localStorage's session
+  //  key ('tote_session') and the login screen's DOM elements.
+  //  It does not alter any scanning, form, or dispatch/return logic.
+  // ════════════════════════════════════════════════════════════════
+  const SESSION_STORAGE_KEY = 'tote_session';
+
+  // Reads the current session object ({token, expiry, name, role, username}) from localStorage.
+  function getSession() {
+    try {
+      const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveSession(session) {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  }
+
+  function clearSession() {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  }
+
+  function showLoginScreen() {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app-root').style.display = 'none';
+  }
+
+  function showApp(session) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-root').style.display = 'block';
+    document.getElementById('user-badge').textContent = session.name + ' · ' + session.role;
+  }
+
+  function setLoginLoading(on) {
+    document.getElementById('login-spinner').className = on ? 'spinner show' : 'spinner';
+    document.getElementById('login-btn').disabled = on;
+    document.getElementById('login-btn-label').textContent = on ? 'Logging in…' : 'Log in';
+  }
+
+  function showLoginError(msg) {
+    const el = document.getElementById('login-error');
+    el.textContent = msg || '';
+    el.style.display = msg ? 'block' : 'none';
+  }
+
+  // Handles the login button. Sends credentials to Apps Script,
+  // and on success stores the session token + user info locally.
+  async function handleLogin() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    showLoginError('');
+
+    if (!username || !password) {
+      showLoginError('Please enter both username and password.');
+      return;
+    }
+    if (!navigator.onLine) {
+      showLoginError('You are offline. Connect to the internet to log in.');
+      return;
+    }
+    if (APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
+      showLoginError('App is not configured yet. Contact your admin.');
+      return;
+    }
+
+    setLoginLoading(true);
+    try {
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'login', username, password })
+      });
+      const result = await res.json();
+      setLoginLoading(false);
+
+      if (result.status !== 'ok') {
+        showLoginError(result.message || 'Login failed. Please check your credentials.');
+        return;
+      }
+
+      const session = {
+        token: result.token,
+        expiry: result.expiry,
+        name: result.name,
+        role: result.role,
+        username: result.username
+      };
+      saveSession(session);
+      document.getElementById('login-password').value = '';
+      showApp(session);
+      loadConfig();
+      flushPending();
+    } catch (err) {
+      setLoginLoading(false);
+      showLoginError('Could not reach the server. Please try again.');
+    }
+  }
+
+  // Handles the logout button. Clears the local session immediately
+  // (so the UI responds instantly) and best-effort invalidates the
+  // token on the server without blocking on the network call.
+  function handleLogout() {
+    const session = getSession();
+    clearSession();
+    showLoginScreen();
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    showLoginError('');
+
+    if (session && session.token && navigator.onLine && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+      fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'logout', token: session.token })
+      }).catch(() => {});
+    }
+  }
+
+  // Called once on page load. Restores a still-valid session so a
+  // refresh doesn't force a re-login, then quietly re-checks with
+  // the server in case the session was revoked or expired server-side.
+  async function restoreSession() {
+    const session = getSession();
+    if (!session || !session.token || Date.now() > session.expiry) {
+      clearSession();
+      showLoginScreen();
+      return;
+    }
+
+    // Optimistic restore — keeps the app usable immediately, even offline.
+    showApp(session);
+
+    if (navigator.onLine && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+      try {
+        const res = await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'validateSession', token: session.token })
+        });
+        const result = await res.json();
+        if (result.status !== 'ok') {
+          clearSession();
+          showLoginScreen();
+          showLoginError('Your session has ended. Please log in again.');
+        } else {
+          flushPending();
+        }
+      } catch (err) {
+        // Offline or unreachable — keep the optimistic session active.
+      }
+    }
+  }
+
+  document.getElementById('login-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleLogin();
+  });
+  document.getElementById('login-username').addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleLogin();
+  });
 
   // ─────────────────────────────────────────────────────────────────
   //  MODE TOGGLE
@@ -515,8 +816,6 @@
       // Offline or unreachable — the cached list from last time is still shown
     }
   }
-
-  window.addEventListener('DOMContentLoaded', loadConfig);
 
   // ─────────────────────────────────────────────────────────────────
   //  CAMERA + QR SCANNING
@@ -602,10 +901,19 @@
 
   // ─────────────────────────────────────────────────────────────────
   //  SUBMIT
+  //  Business payloads never carry the session token themselves —
+  //  the token is attached fresh at send time by postWithSession(),
+  //  so a queued offline scan always uses the *current* session,
+  //  even if the user logged out and back in before it uploads.
   // ─────────────────────────────────────────────────────────────────
   async function submitScan() {
     if (!scannedId) {
       showResult('err', 'No tote scanned', 'Please scan a QR code or type a tote ID first.');
+      return;
+    }
+
+    if (!getSession()) {
+      showLoginScreen();
       return;
     }
 
@@ -647,17 +955,18 @@
     }
 
     try {
-      // NOTE: Content-Type is 'text/plain' on purpose (not 'application/json').
-      // This avoids a CORS "preflight" request that Apps Script can't answer.
-      // Apps Script still reads the raw body fine in doPost via e.postData.contents.
-      const res = await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
-      const result = await res.json();
+      const result = await postWithSession(payload);
       setLoading(false);
 
+      if (result.status === 'session_invalid') {
+        // Don't lose the scan — queue it, then send the user back to login.
+        // It will upload automatically (with a fresh token) after they log back in.
+        savePending(payload);
+        handleLogout();
+        showLoginError(result.message || 'Your session has expired. Please log in again.');
+        clearScan();
+        return;
+      }
       if (result.status === 'duplicate') {
         showResult('err', 'Already dispatched', result.message);
         return; // keep the scanned tote on screen so they can fix it
@@ -685,6 +994,20 @@
     }
   }
 
+  // Posts a business payload (dispatch/return), attaching the CURRENT
+  // session token at send time. Used by both live submits and the
+  // offline queue flush, so a stale token is never used.
+  async function postWithSession(payload) {
+    const session = getSession();
+    const body = { ...payload, token: session ? session.token : '' };
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
+    });
+    return res.json();
+  }
+
   // ─────────────────────────────────────────────────────────────────
   //  OFFLINE QUEUE
   // ─────────────────────────────────────────────────────────────────
@@ -695,16 +1018,24 @@
 
   async function flushPending() {
     if (!navigator.onLine || pendingQueue.length === 0 || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+    if (!getSession()) return; // can't upload without being logged in
+
     const batch = [...pendingQueue];
     for (const item of batch) {
       try {
-        const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(item) });
-        const result = await res.json();
-        // Whether it succeeded, was a duplicate, or was an invalid tote ID,
-        // remove it from the queue — retrying those forever won't help.
-        // Only a genuine network failure (caught below) leaves it queued.
+        const result = await postWithSession(item);
+        if (result.status === 'session_invalid') {
+          // Stop here — this item (and anything after it) stays queued
+          // until the user logs back in with a fresh session.
+          break;
+        }
+        // Success, duplicate, or invalid tote ID — remove it either way,
+        // retrying those forever won't help.
         pendingQueue = pendingQueue.filter(p => p !== item);
-      } catch (_) {}
+      } catch (_) {
+        // Genuine network failure — leave it queued and stop this pass
+        break;
+      }
     }
     localStorage.setItem('tote_pending', JSON.stringify(pendingQueue));
   }
@@ -750,6 +1081,14 @@
   function showPending() {
     alert('Pending uploads: ' + pendingQueue.length + ' scan(s) waiting to sync.');
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  STARTUP
+  // ─────────────────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    restoreSession();
+    loadConfig();
+  });
 
   // ─────────────────────────────────────────────────────────────────
   //  SERVICE WORKER REGISTRATION
