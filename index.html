@@ -525,19 +525,15 @@
     <button onclick="useManual()">Use</button>
   </div>
 
-  <!-- Dispatch form -->
+ <!-- Dispatch form -->
   <div class="form-section" id="dispatch-form">
     <div class="field">
       <label>Destination — vending machine ID</label>
-      <select id="d-dest">
-        <option value="">Select destination…</option>
-      </select>
+      <select id="d-dest"><option value="">Select destination…</option></select>
     </div>
     <div class="field">
       <label>Driver / associate name</label>
-      <select id="d-driver">
-        <option value="">Select driver…</option>
-      </select>
+      <select id="d-driver"><option value="">Select driver…</option></select>
     </div>
     <div class="field">
       <label>Contents (optional)</label>
@@ -549,9 +545,7 @@
   <div class="form-section" id="return-form" style="display:none">
     <div class="field">
       <label>Warehouse associate name</label>
-      <select id="r-assoc">
-        <option value="">Select associate…</option>
-      </select>
+      <select id="r-assoc"><option value="">Select associate…</option></select>
     </div>
     <div class="field">
       <label>Condition on return</label>
@@ -568,12 +562,12 @@
   </div>
 
   <!-- Batch Mode Toggle -->
-<div style="margin: 0 12px 10px; padding: 10px; background: #eee; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
-  <input type="checkbox" id="batch-mode-toggle" style="width: 20px; height: 20px;" />
-  <label for="batch-mode-toggle" style="font-size: 14px; font-weight: 600; color: #111;">
-    Enable Batch Dispatch Mode
-  </label>
-</div>
+  <div style="margin: 0 12px 10px; padding: 10px; background: #eee; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
+    <input type="checkbox" id="batch-mode-toggle" style="width: 20px; height: 20px;" />
+    <label for="batch-mode-toggle" id="batch-mode-label" style="font-size: 14px; font-weight: 600; color: #111;">
+      Enable Batch Dispatch Mode
+    </label>
+  </div>
 
   <!-- Submit button -->
   <button class="submit-btn dispatch-btn" id="submit-btn" onclick="submitScan()">
@@ -807,7 +801,7 @@
   // ─────────────────────────────────────────────────────────────────
   //  MODE TOGGLE
   // ─────────────────────────────────────────────────────────────────
- function setMode(mode) {
+function setMode(mode) {
     currentMode = mode;
     const isD = mode === 'dispatch';
     document.getElementById('btn-d').className = isD ? 'active-d' : '';
@@ -816,6 +810,10 @@
     document.getElementById('mode-label').className = 'mode-label ' + (isD ? 'dispatch' : 'return');
     document.getElementById('dispatch-form').style.display = isD ? 'flex' : 'none';
     document.getElementById('return-form').style.display   = isD ? 'none'  : 'flex';
+    
+    // Update Batch Label dynamically
+    document.getElementById('batch-mode-label').textContent = isD ? 'Enable Batch Dispatch Mode' : 'Enable Batch Return Mode';
+
     const sb = document.getElementById('submit-btn');
     sb.className = 'submit-btn ' + (isD ? 'dispatch-btn' : 'return-btn');
     document.getElementById('submit-label').textContent = isD ? 'Record dispatch' : 'Record return';
@@ -825,8 +823,8 @@
       c.style.borderColor = isD ? '#E24B4A' : '#3B6D11';
     });
     hideResult();
+    clearForm(); // Clear the form when switching modes
   }
-
   function populateDropdowns(config) {
     fillSelect('d-dest',   config.destinations || [], 'Select destination…');
     fillSelect('d-driver', config.drivers      || [], 'Select driver…');
@@ -1098,23 +1096,24 @@
       ? 'Submitting…'
       : (currentMode === 'dispatch' ? 'Record dispatch' : 'Record return');
   }
-  function clearForm() {
-  // If Batch Mode is checked, we ONLY clear the contents field (or other transient data)
-  // and keep destination/driver values intact.
-  const isBatch = document.getElementById('batch-mode-toggle').checked;
   
-  if (isBatch) {
-    document.getElementById('d-contents').value = '';
-    // We do NOT clear d-dest or d-driver
-  } else {
-    // Standard clear
-    document.getElementById('d-dest').value = '';
-    document.getElementById('d-driver').value = '';
-    document.getElementById('d-contents').value = '';
-    document.getElementById('r-assoc').value = '';
-    document.getElementById('r-notes').value = '';
+ function clearForm() {
+    const isBatch = document.getElementById('batch-mode-toggle').checked;
+    if (isBatch) {
+      // In batch mode, we only clear transient fields (like Contents or Notes)
+      if(currentMode === 'dispatch') {
+         document.getElementById('d-contents').value = '';
+      } else {
+         document.getElementById('r-notes').value = '';
+      }
+    } else {
+      // In normal mode, clear everything
+      ['d-dest','d-driver','d-contents','r-assoc','r-notes'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+    }
   }
-}
 
   function showHistory() {
     const items = JSON.parse(localStorage.getItem('tote_pending') || '[]');
