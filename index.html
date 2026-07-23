@@ -1079,6 +1079,21 @@ function setMode(mode) {
   // ─────────────────────────────────────────────────────────────────
   //  UI HELPERS
   // ─────────────────────────────────────────────────────────────────
+
+  function fillSelect(id, items, placeholder) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    
+    // Create the options HTML
+    let html = `<option value="">${placeholder}</option>`;
+    items.forEach(function(item) {
+      html += `<option value="${item}">${item}</option>`;
+    });
+    
+    // Insert into the dropdown
+    el.innerHTML = html;
+  }
+  
   function showResult(type, title, body) {
     const rc = document.getElementById('result-card');
     rc.className = 'result-card show ' + type;
