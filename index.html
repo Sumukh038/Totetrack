@@ -567,6 +567,14 @@
     </div>
   </div>
 
+  <!-- Batch Mode Toggle -->
+<div style="margin: 0 12px 10px; padding: 10px; background: #eee; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
+  <input type="checkbox" id="batch-mode-toggle" style="width: 20px; height: 20px;" />
+  <label for="batch-mode-toggle" style="font-size: 14px; font-weight: 600; color: #111;">
+    Enable Batch Dispatch Mode
+  </label>
+</div>
+
   <!-- Submit button -->
   <button class="submit-btn dispatch-btn" id="submit-btn" onclick="submitScan()">
     <div class="spinner" id="spinner"></div>
@@ -994,6 +1002,7 @@
         : 'You are offline. Scan saved locally and will upload automatically when you reconnect.\n\nTimestamp: ' + timestamp;
       showResult('ok', 'Saved locally', msg);
       clearScan();
+      clearForm(); // Will keep Dispatch details if Batch Mode is checked
       return;
     }
 
@@ -1002,8 +1011,6 @@
       setLoading(false);
 
       if (result.status === 'session_invalid') {
-        // Don't lose the scan — queue it, then send the user back to login.
-        // It will upload automatically (with a fresh token) after they log back in.
         savePending(payload);
         handleLogout();
         showLoginError(result.message || 'Your session has expired. Please log in again.');
@@ -1012,7 +1019,7 @@
       }
       if (result.status === 'duplicate') {
         showResult('err', 'Already dispatched', result.message);
-        return; // keep the scanned tote on screen so they can fix it
+        return; 
       }
       if (result.status === 'invalid_tote') {
         showResult('err', 'Tote ID not recognised', result.message);
@@ -1028,15 +1035,15 @@
         : `${scannedId} returned\nBy: ${payload.associate}\nCondition: ${payload.condition}\nTime: ${timestamp}`;
       showResult('ok', '✓ ' + label, detail);
       clearScan();
-      clearForm();
+      clearForm(); // Will keep Dispatch details if Batch Mode is checked
     } catch (err) {
       setLoading(false);
       savePending(payload);
       showResult('ok', 'Saved offline', 'Could not reach server. Scan saved and will retry automatically.\n\n' + timestamp);
       clearScan();
+      clearForm(); // Will keep Dispatch details if Batch Mode is checked
     }
   }
-
   // Posts a business payload (dispatch/return), attaching the CURRENT
   // session token at send time. Used by both live submits and the
   // offline queue flush, so a stale token is never used.
@@ -1108,11 +1115,22 @@
       : (currentMode === 'dispatch' ? 'Record dispatch' : 'Record return');
   }
   function clearForm() {
-    ['d-dest','d-driver','d-contents','r-assoc','r-notes'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
+  // If Batch Mode is checked, we ONLY clear the contents field (or other transient data)
+  // and keep destination/driver values intact.
+  const isBatch = document.getElementById('batch-mode-toggle').checked;
+  
+  if (isBatch) {
+    document.getElementById('d-contents').value = '';
+    // We do NOT clear d-dest or d-driver
+  } else {
+    // Standard clear
+    document.getElementById('d-dest').value = '';
+    document.getElementById('d-driver').value = '';
+    document.getElementById('d-contents').value = '';
+    document.getElementById('r-assoc').value = '';
+    document.getElementById('r-notes').value = '';
   }
+}
 
   function showHistory() {
     const items = JSON.parse(localStorage.getItem('tote_pending') || '[]');
