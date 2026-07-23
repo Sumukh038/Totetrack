@@ -807,34 +807,24 @@
   // ─────────────────────────────────────────────────────────────────
   //  MODE TOGGLE
   // ─────────────────────────────────────────────────────────────────
-function setMode(mode) {
-  currentMode = mode;
-  const isD = mode === 'dispatch';
-  
-  // Existing toggle UI logic...
-  document.getElementById('btn-d').className = isD ? 'active-d' : '';
-  document.getElementById('btn-r').className = isD ? '' : 'active-r';
-  // ... (keep your existing logic here)
-
-  // NEW: Update Batch toggle label
-  const batchLabel = document.getElementById('batch-mode-label');
-  batchLabel.textContent = isD ? 'Enable Batch Dispatch Mode' : 'Enable Batch Return Mode';
-  }
-
-  // ─────────────────────────────────────────────────────────────────
-  //  DROPDOWN CONFIG (destinations / drivers / associates / tote IDs)
-  //  Pulled from the "Config" tab in your Google Sheet — see appsscript.gs
-  // ─────────────────────────────────────────────────────────────────
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-  }
-
-  function fillSelect(id, items, placeholder) {
-    const sel = document.getElementById(id);
-    const current = sel.value;
-    sel.innerHTML = '<option value="">' + placeholder + '</option>' +
-      items.map(i => `<option value="${escapeHtml(i)}">${escapeHtml(i)}</option>`).join('');
-    if (items.indexOf(current) !== -1) sel.value = current;
+ function setMode(mode) {
+    currentMode = mode;
+    const isD = mode === 'dispatch';
+    document.getElementById('btn-d').className = isD ? 'active-d' : '';
+    document.getElementById('btn-r').className = isD ? '' : 'active-r';
+    document.getElementById('mode-label').textContent = isD ? 'Dispatch' : 'Return';
+    document.getElementById('mode-label').className = 'mode-label ' + (isD ? 'dispatch' : 'return');
+    document.getElementById('dispatch-form').style.display = isD ? 'flex' : 'none';
+    document.getElementById('return-form').style.display   = isD ? 'none'  : 'flex';
+    const sb = document.getElementById('submit-btn');
+    sb.className = 'submit-btn ' + (isD ? 'dispatch-btn' : 'return-btn');
+    document.getElementById('submit-label').textContent = isD ? 'Record dispatch' : 'Record return';
+    const sl = document.getElementById('scan-line');
+    sl.style.background = isD ? '#E24B4A' : '#3B6D11';
+    document.querySelectorAll('.corner').forEach(c => {
+      c.style.borderColor = isD ? '#E24B4A' : '#3B6D11';
+    });
+    hideResult();
   }
 
   function populateDropdowns(config) {
