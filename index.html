@@ -414,6 +414,106 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner.show { display: inline-block; }
+
+    /* ── Admin screen (added) ── */
+    .admin-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .admin-header-row h2 { font-size: 16px; }
+    .admin-add-btn {
+      padding: 8px 14px;
+      background: #111;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .user-item {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+    .user-item-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .user-item-name { font-weight: 700; font-size: 14px; }
+    .user-item-username { font-size: 12px; color: #777; }
+    .user-item-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .role-badge, .status-badge {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .role-badge.role-admin { background: #185FA5; color: #fff; }
+    .role-badge.role-user { background: #eee; color: #555; }
+    .status-badge.status-active { background: #EAF3DE; color: #27500A; }
+    .status-badge.status-disabled { background: #FCEBEB; color: #791F1F; }
+    .user-item-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .user-item-actions button {
+      flex: 1;
+      padding: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      background: #fff;
+      cursor: pointer;
+      color: #333;
+    }
+    .user-item-actions button.danger { color: #791F1F; border-color: #F09595; }
+    .user-item-actions button.ok { color: #27500A; border-color: #97C459; }
+
+    /* ── Admin modals (Add/Edit user, Reset password) ── */
+    .admin-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      align-items: center;
+      justify-content: center;
+      z-index: 900;
+      padding: 20px;
+    }
+    .admin-modal-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px 20px;
+      width: 100%;
+      max-width: 340px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    }
+    .admin-modal-card h3 { font-size: 17px; margin-bottom: 14px; }
+    .admin-modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+    .modal-btn-secondary, .modal-btn-primary {
+      flex: 1;
+      padding: 11px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .modal-btn-secondary { background: #eee; color: #333; }
+    .modal-btn-primary { background: #111; color: #fff; }
+    .modal-btn-primary:disabled { background: #999; cursor: not-allowed; }
+    .admin-modal-error {
+      display: none;
+      margin-top: 10px;
+      color: #791F1F;
+      font-size: 12px;
+      background: #FCEBEB;
+      border: 1px solid #F09595;
+      border-radius: 8px;
+      padding: 8px;
+      white-space: pre-line;
+    }
+    .admin-modal-error.show { display: block; }
   </style>
 </head>
 <body>
@@ -477,6 +577,10 @@
       </button>
     </div>
   </div>
+
+  <!-- Scan screen (wraps existing, unmodified Scan UI so it can be
+       hidden when the new Admin screen is shown) -->
+  <div id="scan-screen">
 
   <!-- Mode toggle -->
   <div class="mode-toggle">
@@ -581,9 +685,86 @@
     <div class="rb" id="result-body"></div>
   </div>
 
+  </div><!-- /#scan-screen -->
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ADMIN SCREEN (new) — only revealed via nav-admin, which is
+       itself only shown when session.role === 'Admin' (see showApp()).
+       Uses the existing header, session, and fetch/token plumbing;
+       does not touch Scan/History/Pending in any way.
+       ══════════════════════════════════════════════════════════════ -->
+  <div id="admin-screen" style="display:none">
+    <div class="form-section">
+      <div class="admin-header-row">
+        <h2>👤 User Management</h2>
+        <button class="admin-add-btn" onclick="openUserModal()">+ Add User</button>
+      </div>
+      <div id="admin-users-list"><p style="font-size:13px; color:#777;">Loading users…</p></div>
+    </div>
+  </div><!-- /#admin-screen -->
+
+  <!-- Add / Edit user modal (shared) -->
+  <div class="admin-modal-overlay" id="user-modal">
+    <div class="admin-modal-card">
+      <h3 id="user-modal-title">Add User</h3>
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="um-name" />
+      </div>
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="um-username" autocapitalize="none" />
+      </div>
+      <div class="field" id="um-password-field">
+        <label>Password</label>
+        <input type="password" id="um-password" autocomplete="new-password" />
+      </div>
+      <div class="field">
+        <label>Role</label>
+        <select id="um-role">
+          <option value="User">User</option>
+          <option value="Admin">Admin</option>
+        </select>
+      </div>
+      <div class="field" id="um-active-field" style="display:none">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="um-active" style="width:18px;height:18px;" /> Active
+        </label>
+      </div>
+      <div class="admin-modal-error" id="um-error"></div>
+      <div class="admin-modal-actions">
+        <button class="modal-btn-secondary" onclick="closeUserModal()">Cancel</button>
+        <button class="modal-btn-primary" id="um-save-btn" onclick="saveUserModal()">
+          <div class="spinner" id="um-spinner"></div>
+          <span id="um-save-label">Save</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reset password modal -->
+  <div class="admin-modal-overlay" id="reset-modal">
+    <div class="admin-modal-card">
+      <h3>Reset Password</h3>
+      <p style="font-size:13px; color:#666; margin-bottom:10px;">Set a new password for <strong id="reset-username-label"></strong></p>
+      <div class="field">
+        <label>New password</label>
+        <input type="password" id="reset-password" autocomplete="new-password" />
+      </div>
+      <div class="admin-modal-error" id="reset-error"></div>
+      <div class="admin-modal-actions">
+        <button class="modal-btn-secondary" onclick="closeResetModal()">Cancel</button>
+        <button class="modal-btn-primary" id="reset-save-btn" onclick="saveResetPassword()">
+          <div class="spinner" id="reset-spinner"></div>
+          <span id="reset-save-label">Reset</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Bottom nav -->
   <div class="bottom-nav">
-    <button class="nav-btn active" onclick="alert('You are on the Scan screen')">
+    <button class="nav-btn active" id="nav-scan" onclick="switchTab('scan')">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       Scan
     </button>
@@ -594,6 +775,10 @@
     <button class="nav-btn" onclick="showPending()">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
       Pending
+    </button>
+    <button class="nav-btn" id="nav-admin" onclick="switchTab('admin')" style="display:none">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Admin
     </button>
   </div>
 
@@ -656,6 +841,7 @@
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app-root').style.display = 'block';
     document.getElementById('user-badge').textContent = session.name + ' · ' + session.role;
+    document.getElementById('nav-admin').style.display = session.role === 'Admin' ? 'flex' : 'none';
   }
 
   function setLoginLoading(on) {
@@ -743,6 +929,10 @@
     const session = getSession();
     clearSession();
     showLoginScreen();
+    document.getElementById('admin-screen').style.display = 'none';
+    document.getElementById('scan-screen').style.display = 'block';
+    document.getElementById('nav-admin').classList.remove('active');
+    document.getElementById('nav-scan').classList.add('active');
     document.getElementById('login-username').value = '';
     document.getElementById('login-password').value = '';
     showLoginError('');
@@ -1139,6 +1329,269 @@ function setMode(mode) {
 
   function showPending() {
     alert('Pending uploads: ' + pendingQueue.length + ' scan(s) waiting to sync.');
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  ADMIN — USER MANAGEMENT (Admin role only)
+  //  Self-contained; only touches the new admin-screen / modal DOM
+  //  and calls the new listUsers / updateUser / resetPassword backend
+  //  actions plus the existing createUser action. Reuses the existing
+  //  postWithSession() (adds the current token) and handleLogout()/
+  //  showLoginError() for expired-session handling. Does not alter
+  //  any Scan, History, Pending, or auth logic above.
+  // ─────────────────────────────────────────────────────────────────
+  let adminUsers = [];
+  let editingUsername = null; // null → Add-user mode, else Edit-user mode
+
+  function switchTab(tab) {
+    const scanScreen  = document.getElementById('scan-screen');
+    const adminScreen = document.getElementById('admin-screen');
+    const navScan     = document.getElementById('nav-scan');
+    const navAdmin    = document.getElementById('nav-admin');
+
+    if (tab === 'admin') {
+      scanScreen.style.display  = 'none';
+      adminScreen.style.display = 'block';
+      navScan.classList.remove('active');
+      navAdmin.classList.add('active');
+      loadUsers();
+    } else {
+      scanScreen.style.display  = 'block';
+      adminScreen.style.display = 'none';
+      navAdmin.classList.remove('active');
+      navScan.classList.add('active');
+    }
+  }
+
+  async function loadUsers() {
+    const listEl = document.getElementById('admin-users-list');
+    listEl.innerHTML = '<p style="font-size:13px; color:#777;">Loading users…</p>';
+    try {
+      const result = await postWithSession({ action: 'listUsers' });
+      if (result.status === 'session_invalid' || result.status === 'invalid') {
+        handleLogout();
+        showLoginError(result.message || 'Your session has expired. Please log in again.');
+        return;
+      }
+      if (result.status !== 'ok') {
+        listEl.innerHTML = '<p style="font-size:13px; color:#791F1F;">' + (result.message || 'Could not load users.') + '</p>';
+        return;
+      }
+      adminUsers = result.users || [];
+      renderUsers();
+    } catch (err) {
+      listEl.innerHTML = '<p style="font-size:13px; color:#791F1F;">Could not reach server. Check your connection.</p>';
+    }
+  }
+
+  function renderUsers() {
+    const listEl = document.getElementById('admin-users-list');
+    if (adminUsers.length === 0) {
+      listEl.innerHTML = '<p style="font-size:13px; color:#777;">No users found.</p>';
+      return;
+    }
+    listEl.innerHTML = adminUsers.map(u => `
+      <div class="user-item">
+        <div class="user-item-top">
+          <div>
+            <div class="user-item-name">${u.name}</div>
+            <div class="user-item-username">@${u.username}</div>
+          </div>
+          <div class="user-item-badges">
+            <span class="role-badge ${u.role === 'Admin' ? 'role-admin' : 'role-user'}">${u.role}</span>
+            <span class="status-badge ${u.active ? 'status-active' : 'status-disabled'}">${u.active ? 'Active' : 'Disabled'}</span>
+          </div>
+        </div>
+        <div class="user-item-actions">
+          <button onclick="openUserModal('${u.username}')">Edit</button>
+          <button onclick="openResetModal('${u.username}')">Reset password</button>
+          <button class="${u.active ? 'danger' : 'ok'}" onclick="toggleActive('${u.username}')">${u.active ? 'Disable' : 'Activate'}</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Opens the Add/Edit user modal. Call with no argument for Add-user
+  // mode; pass a username to edit that user (username stays read-only).
+  function openUserModal(username) {
+    editingUsername = username || null;
+    showUserModalError('');
+
+    const usernameInput = document.getElementById('um-username');
+    const passwordField = document.getElementById('um-password-field');
+    const activeField    = document.getElementById('um-active-field');
+
+    if (editingUsername) {
+      const u = adminUsers.find(x => x.username === editingUsername);
+      document.getElementById('user-modal-title').textContent = 'Edit User';
+      document.getElementById('um-name').value = u ? u.name : '';
+      usernameInput.value = editingUsername;
+      usernameInput.disabled = true;        // Username is read-only when editing
+      passwordField.style.display = 'none'; // Password changes go through Reset Password
+      document.getElementById('um-role').value = u ? u.role : 'User';
+      activeField.style.display = 'block';
+      document.getElementById('um-active').checked = u ? u.active : true;
+    } else {
+      document.getElementById('user-modal-title').textContent = 'Add User';
+      document.getElementById('um-name').value = '';
+      usernameInput.value = '';
+      usernameInput.disabled = false;
+      passwordField.style.display = 'block';
+      document.getElementById('um-password').value = '';
+      document.getElementById('um-role').value = 'User';
+      activeField.style.display = 'none';
+    }
+
+    document.getElementById('user-modal').style.display = 'flex';
+  }
+
+  function closeUserModal() {
+    document.getElementById('user-modal').style.display = 'none';
+  }
+
+  function setUserModalLoading(on) {
+    document.getElementById('um-spinner').className = on ? 'spinner show' : 'spinner';
+    document.getElementById('um-save-btn').disabled = on;
+    document.getElementById('um-save-label').textContent = on ? 'Saving…' : 'Save';
+  }
+
+  function showUserModalError(msg) {
+    const el = document.getElementById('um-error');
+    el.textContent = msg || '';
+    el.className = msg ? 'admin-modal-error show' : 'admin-modal-error';
+  }
+
+  // Handles both Add User (existing 'createUser' action) and
+  // Edit User (new 'updateUser' action) from the same modal.
+  async function saveUserModal() {
+    const name     = document.getElementById('um-name').value.trim();
+    const username = document.getElementById('um-username').value.trim();
+    const role     = document.getElementById('um-role').value;
+
+    if (!name || !username) {
+      showUserModalError('Name and username are required.');
+      return;
+    }
+
+    setUserModalLoading(true);
+    try {
+      let result;
+      if (editingUsername) {
+        const active = document.getElementById('um-active').checked;
+        result = await postWithSession({
+          action: 'updateUser',
+          username_old: editingUsername,
+          name, role, active
+        });
+      } else {
+        const password = document.getElementById('um-password').value;
+        if (!password) {
+          setUserModalLoading(false);
+          showUserModalError('Password is required for a new user.');
+          return;
+        }
+        result = await postWithSession({ action: 'createUser', name, username, password, role });
+      }
+
+      setUserModalLoading(false);
+
+      if (result.status === 'session_invalid' || result.status === 'invalid') {
+        closeUserModal();
+        handleLogout();
+        showLoginError(result.message || 'Your session has expired. Please log in again.');
+        return;
+      }
+      if (result.status !== 'ok') {
+        showUserModalError(result.message || 'Could not save user.');
+        return;
+      }
+
+      closeUserModal();
+      loadUsers();
+    } catch (err) {
+      setUserModalLoading(false);
+      showUserModalError('Could not reach server. Please try again.');
+    }
+  }
+
+  function openResetModal(username) {
+    editingUsername = username;
+    document.getElementById('reset-username-label').textContent = username;
+    document.getElementById('reset-password').value = '';
+    showResetModalError('');
+    document.getElementById('reset-modal').style.display = 'flex';
+  }
+
+  function closeResetModal() {
+    document.getElementById('reset-modal').style.display = 'none';
+  }
+
+  function setResetModalLoading(on) {
+    document.getElementById('reset-spinner').className = on ? 'spinner show' : 'spinner';
+    document.getElementById('reset-save-btn').disabled = on;
+    document.getElementById('reset-save-label').textContent = on ? 'Saving…' : 'Reset';
+  }
+
+  function showResetModalError(msg) {
+    const el = document.getElementById('reset-error');
+    el.textContent = msg || '';
+    el.className = msg ? 'admin-modal-error show' : 'admin-modal-error';
+  }
+
+  async function saveResetPassword() {
+    const password_new = document.getElementById('reset-password').value;
+    if (!password_new) {
+      showResetModalError('Please enter a new password.');
+      return;
+    }
+    setResetModalLoading(true);
+    try {
+      const result = await postWithSession({ action: 'resetPassword', username: editingUsername, password_new });
+      setResetModalLoading(false);
+
+      if (result.status === 'session_invalid' || result.status === 'invalid') {
+        closeResetModal();
+        handleLogout();
+        showLoginError(result.message || 'Your session has expired. Please log in again.');
+        return;
+      }
+      if (result.status !== 'ok') {
+        showResetModalError(result.message || 'Could not reset password.');
+        return;
+      }
+      closeResetModal();
+      alert(result.message || 'Password reset successfully.');
+    } catch (err) {
+      setResetModalLoading(false);
+      showResetModalError('Could not reach server. Please try again.');
+    }
+  }
+
+  // Quick Activate/Disable straight from the list — reuses updateUser.
+  async function toggleActive(username) {
+    const u = adminUsers.find(x => x.username === username);
+    if (!u) return;
+    if (!confirm(`${u.active ? 'Disable' : 'Activate'} user "${username}"?`)) return;
+
+    try {
+      const result = await postWithSession({
+        action: 'updateUser',
+        username_old: username,
+        name: u.name, role: u.role, active: !u.active
+      });
+      if (result.status === 'session_invalid' || result.status === 'invalid') {
+        handleLogout();
+        showLoginError(result.message || 'Your session has expired. Please log in again.');
+        return;
+      }
+      if (result.status !== 'ok') {
+        alert(result.message || 'Could not update user.');
+        return;
+      }
+      loadUsers();
+    } catch (err) {
+      alert('Could not reach server. Please try again.');
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────
