@@ -67,31 +67,6 @@ The complete 🔄** ToteTrack process flow**:
                             ↓
                       flushPending()
 
-Admin Flow:
-
-Admin logs in
-      ↓
-showApp()
-      ↓
-role === "Admin"
-      ↓
-Admin tab becomes visible
-      ↓
-switchTab("admin")
-      ↓
-loadUsers()
-      ↓
-Apps Script → listUsers
-      ↓
-renderUsers()
-      ↓
- ┌────────┬───────────────┬──────────────┐
- ↓        ↓               ↓
-Edit   Reset Password   Activate/Disable
- ↓        ↓               ↓
-update   resetPassword  updateUser
-User
-
 Each tote's dispatch and return information is maintained in a single transaction record, providing a clear operational and audit trail.
 
 🛠️ Technology
