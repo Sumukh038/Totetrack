@@ -333,6 +333,37 @@
     }
     .field input:focus, .field select:focus { outline: none; border-color: #888; }
 
+     /* ── Searchable select (generic, reusable) ── */
+    .searchable-select { position: relative; }
+    .ss-input {
+      width: 100%;
+      padding: 10px 34px 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>') no-repeat right 10px center / 16px 16px;
+      color: #111;
+    }
+    .ss-input:focus { outline: none; border-color: #888; }
+    .ss-panel {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 220px;
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+      z-index: 60;
+    }
+    .ss-panel.open { display: block; }
+    .ss-option { padding: 10px 12px; font-size: 14px; cursor: pointer; color: #111; }
+    .ss-option:hover, .ss-option.highlighted { background: #f0f0f0; }
+    .ss-empty { padding: 10px 12px; font-size: 13px; color: #999; }
+
     /* ── Submit button ── */
     .submit-btn {
       margin: 4px 12px 12px;
@@ -631,13 +662,21 @@
 
  <!-- Dispatch form -->
   <div class="form-section" id="dispatch-form">
-    <div class="field">
+      <div class="field">
       <label>Destination — vending machine ID</label>
-      <select id="d-dest"><option value="">Select destination…</option></select>
+      <div class="searchable-select">
+        <input type="text" class="ss-input" id="d-dest-search" placeholder="Select destination…" autocomplete="off" autocapitalize="none" />
+        <div class="ss-panel" id="d-dest-panel"></div>
+        <select id="d-dest" style="display:none"><option value="">Select destination…</option></select>
+      </div>
     </div>
-    <div class="field">
+       <div class="field">
       <label>Driver / associate name</label>
-      <select id="d-driver"><option value="">Select driver…</option></select>
+      <div class="searchable-select">
+        <input type="text" class="ss-input" id="d-driver-search" placeholder="Select driver…" autocomplete="off" autocapitalize="none" />
+        <div class="ss-panel" id="d-driver-panel"></div>
+        <select id="d-driver" style="display:none"><option value="">Select driver…</option></select>
+      </div>
     </div>
     <div class="field">
       <label>Contents (optional)</label>
@@ -647,9 +686,13 @@
 
   <!-- Return form -->
   <div class="form-section" id="return-form" style="display:none">
-    <div class="field">
+      <div class="field">
       <label>Warehouse associate name</label>
-      <select id="r-assoc"><option value="">Select associate…</option></select>
+      <div class="searchable-select">
+        <input type="text" class="ss-input" id="r-assoc-search" placeholder="Select associate…" autocomplete="off" autocapitalize="none" />
+        <div class="ss-panel" id="r-assoc-panel"></div>
+        <select id="r-assoc" style="display:none"><option value="">Select associate…</option></select>
+      </div>
     </div>
     <div class="field">
       <label>Condition on return</label>
@@ -1280,8 +1323,11 @@ function setMode(mode) {
       html += `<option value="${item}">${item}</option>`;
     });
     
-    // Insert into the dropdown
+      // Insert into the dropdown
     el.innerHTML = html;
+
+    // Keep the searchable combo's visible text in sync with the (now reset) selection.
+    if (searchableSelects[id]) syncComboDisplay(id);
   }
   
   function showResult(type, title, body) {
@@ -1329,6 +1375,119 @@ function setMode(mode) {
 
   function showPending() {
     alert('Pending uploads: ' + pendingQueue.length + ' scan(s) waiting to sync.');
+  }
+
+    // ── SEARCHABLE SELECT (generic, reusable) ──
+  const searchableSelects = {};
+
+  function initSearchableSelect(id) {
+    const select = document.getElementById(id);
+    const input  = document.getElementById(id + '-search');
+    const panel  = document.getElementById(id + '-panel');
+    if (!select || !input || !panel) return;
+
+    searchableSelects[id] = { select, input, panel, placeholder: input.placeholder || 'Select…', highlighted: -1 };
+
+    input.addEventListener('focus', () => openComboPanel(id));
+    input.addEventListener('click', () => openComboPanel(id));
+    input.addEventListener('input', () => renderComboPanel(id, input.value));
+    input.addEventListener('keydown', e => handleComboKeydown(id, e));
+    input.addEventListener('blur', () => setTimeout(() => closeComboPanel(id), 150));
+
+    syncComboDisplay(id);
+  }
+
+  function getComboOptions(id) {
+    const { select } = searchableSelects[id];
+    return Array.from(select.options).filter(o => o.value !== '').map(o => ({ value: o.value, text: o.text }));
+  }
+
+  function openComboPanel(id) {
+    const combo = searchableSelects[id];
+    if (!combo) return;
+    renderComboPanel(id, combo.input.value);
+  }
+
+  function closeComboPanel(id) {
+    const combo = searchableSelects[id];
+    if (!combo) return;
+    combo.panel.classList.remove('open');
+    combo.highlighted = -1;
+    syncComboDisplay(id);
+  }
+
+  function renderComboPanel(id, query) {
+    const combo = searchableSelects[id];
+    if (!combo) return;
+    const q = query.trim().toLowerCase();
+    const all = getComboOptions(id);
+    const filtered = q ? all.filter(o => o.text.toLowerCase().includes(q)) : all;
+
+    combo.panel.innerHTML = '';
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'ss-empty';
+      empty.textContent = 'No results found';
+      combo.panel.appendChild(empty);
+    } else {
+      filtered.forEach(opt => {
+        const row = document.createElement('div');
+        row.className = 'ss-option';
+        row.textContent = opt.text;
+        row.dataset.value = opt.value;
+        row.addEventListener('mousedown', e => { e.preventDefault(); selectComboOption(id, opt.value, opt.text); });
+        combo.panel.appendChild(row);
+      });
+    }
+    combo.highlighted = -1;
+    combo.panel.classList.add('open');
+  }
+
+  function selectComboOption(id, value, text) {
+    const combo = searchableSelects[id];
+    if (!combo) return;
+    combo.select.value = value;
+    combo.input.value = text;
+    combo.panel.classList.remove('open');
+    combo.highlighted = -1;
+  }
+
+  function syncComboDisplay(id) {
+    const combo = searchableSelects[id];
+    if (!combo) return;
+    const opt = combo.select.options[combo.select.selectedIndex];
+    combo.input.value = (opt && opt.value !== '') ? opt.text : '';
+    combo.input.placeholder = combo.placeholder;
+  }
+
+  function handleComboKeydown(id, e) {
+    const combo = searchableSelects[id];
+    if (!combo) return;
+    if (e.key === 'Escape') { combo.input.blur(); return; }
+    if (!combo.panel.classList.contains('open')) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') openComboPanel(id);
+      return;
+    }
+    const items = Array.from(combo.panel.querySelectorAll('.ss-option'));
+    if (items.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      combo.highlighted = Math.min(combo.highlighted + 1, items.length - 1);
+      highlightComboItem(items, combo.highlighted);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      combo.highlighted = Math.max(combo.highlighted - 1, 0);
+      highlightComboItem(items, combo.highlighted);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const el = items[combo.highlighted];
+      if (el) selectComboOption(id, el.dataset.value, el.textContent);
+    }
+  }
+
+  function highlightComboItem(items, idx) {
+    items.forEach((el, i) => el.classList.toggle('highlighted', i === idx));
+    if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -1598,6 +1757,9 @@ function setMode(mode) {
   //  STARTUP
   // ─────────────────────────────────────────────────────────────────
   window.addEventListener('DOMContentLoaded', () => {
+    initSearchableSelect('d-dest');
+    initSearchableSelect('d-driver');
+    initSearchableSelect('r-assoc');
     restoreSession();
     loadConfig();
   });
