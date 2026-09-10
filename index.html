@@ -1187,11 +1187,11 @@ function setMode(mode) {
       return;
     }
 
-    if (document.getElementById('batch-mode-toggle').checked && batchScanCount >= BATCH_SCAN_LIMIT) {
+    if (currentMode === 'dispatch' && document.getElementById('batch-mode-toggle').checked && batchScanCount >= BATCH_SCAN_LIMIT) {
       showResult('err', 'Scan limit reached', 'Scan limit reached. Please verify/change the Location, MID, Associate, and other batch details before continuing.');
       return;
     }
-
+      
     if (!getSession()) {
       showLoginScreen();
       return;
@@ -1329,8 +1329,6 @@ function setMode(mode) {
 
   // Reset the batch scan count whenever Batch Mode is turned on/off.
   document.getElementById('batch-mode-toggle').addEventListener('change', resetBatchScanCount);
-  // Condition (Return mode) persists across batch scans like Location/Associate do — count it as a batch detail.
-  document.getElementById('r-cond').addEventListener('change', resetBatchScanCount);
   // ─────────────────────────────────────────────────────────────────
   //  UI HELPERS
   // ─────────────────────────────────────────────────────────────────
@@ -1389,12 +1387,12 @@ function setMode(mode) {
   }
 
    // ── BATCH SCAN LIMIT HELPERS ──
-  function registerBatchScan() {
-    if (document.getElementById('batch-mode-toggle').checked) {
+    function registerBatchScan() {
+    // The scan limit only applies to Dispatch (Return isn't tied to a Location/MID).
+    if (currentMode === 'dispatch' && document.getElementById('batch-mode-toggle').checked) {
       batchScanCount++;
     }
   }
-
   function resetBatchScanCount() {
     batchScanCount = 0;
   }
