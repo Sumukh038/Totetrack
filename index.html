@@ -840,6 +840,7 @@
   // ─────────────────────────────────────────────────────────────────
   //  STATE
   // ─────────────────────────────────────────────────────────────────
+  
   let currentMode = 'dispatch';
   let scannedId   = '';
   let scanning    = false;
@@ -847,6 +848,13 @@
   let lastScan    = 0;
   let pendingQueue = JSON.parse(localStorage.getItem('tote_pending') || '[]');
   let toteConfig   = JSON.parse(localStorage.getItem('tote_config') || '{"destinations":[],"drivers":[],"associates":[],"toteIds":[]}');
+
+  // ─── BATCH SCAN LIMIT (configurable) ───
+  // Change this single value to raise/lower how many scans are allowed
+  // in Batch Dispatch/Return mode before the associate must re-verify
+  // the Location/MID, Driver/Associate, and Condition fields.
+  const BATCH_SCAN_LIMIT = 3;
+  let batchScanCount = 0; // scans recorded in the current batch "streak"
 
   // ════════════════════════════════════════════════════════════════
   //  AUTHENTICATION MODULE
@@ -1057,6 +1065,7 @@ function setMode(mode) {
     });
     hideResult();
     clearForm(); // Clear the form when switching modes
+    resetBatchScanCount();
   }
   function populateDropdowns(config) {
     fillSelect('d-dest',   config.destinations || [], 'Select destination…');
@@ -1172,9 +1181,14 @@ function setMode(mode) {
   //  so a queued offline scan always uses the *current* session,
   //  even if the user logged out and back in before it uploads.
   // ─────────────────────────────────────────────────────────────────
-  async function submitScan() {
+    async function submitScan() {
     if (!scannedId) {
       showResult('err', 'No tote scanned', 'Please scan a QR code or type a tote ID first.');
+      return;
+    }
+
+    if (document.getElementById('batch-mode-toggle').checked && batchScanCount >= BATCH_SCAN_LIMIT) {
+      showResult('err', 'Scan limit reached', 'Scan limit reached. Please verify/change the Location, MID, Associate, and other batch details before continuing.');
       return;
     }
 
@@ -1215,7 +1229,9 @@ function setMode(mode) {
       const msg = APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE'
         ? 'Apps Script URL not set yet. Scan saved locally.\n\nTimestamp: ' + timestamp
         : 'You are offline. Scan saved locally and will upload automatically when you reconnect.\n\nTimestamp: ' + timestamp;
+       
       showResult('ok', 'Saved locally', msg);
+      registerBatchScan();
       clearScan();
       clearForm(); // Will keep Dispatch details if Batch Mode is checked
       return;
@@ -1249,12 +1265,14 @@ function setMode(mode) {
         ? `${scannedId} → ${payload.destination}\nDriver: ${payload.driver}\nTime: ${timestamp}`
         : `${scannedId} returned\nBy: ${payload.associate}\nCondition: ${payload.condition}\nTime: ${timestamp}`;
       showResult('ok', '✓ ' + label, detail);
+      registerBatchScan();
       clearScan();
       clearForm(); // Will keep Dispatch details if Batch Mode is checked
     } catch (err) {
       setLoading(false);
       savePending(payload);
       showResult('ok', 'Saved offline', 'Could not reach server. Scan saved and will retry automatically.\n\n' + timestamp);
+      registerBatchScan();
       clearScan();
       clearForm(); // Will keep Dispatch details if Batch Mode is checked
     }
@@ -1309,6 +1327,10 @@ function setMode(mode) {
   window.addEventListener('offline', () => document.getElementById('offline-banner').classList.add('show'));
   if (!navigator.onLine) document.getElementById('offline-banner').classList.add('show');
 
+  // Reset the batch scan count whenever Batch Mode is turned on/off.
+  document.getElementById('batch-mode-toggle').addEventListener('change', resetBatchScanCount);
+  // Condition (Return mode) persists across batch scans like Location/Associate do — count it as a batch detail.
+  document.getElementById('r-cond').addEventListener('change', resetBatchScanCount);
   // ─────────────────────────────────────────────────────────────────
   //  UI HELPERS
   // ─────────────────────────────────────────────────────────────────
@@ -1366,7 +1388,18 @@ function setMode(mode) {
     }
   }
 
-  function showHistory() {
+   // ── BATCH SCAN LIMIT HELPERS ──
+  function registerBatchScan() {
+    if (document.getElementById('batch-mode-toggle').checked) {
+      batchScanCount++;
+    }
+  }
+
+  function resetBatchScanCount() {
+    batchScanCount = 0;
+  }
+
+   function showHistory() {
     const items = JSON.parse(localStorage.getItem('tote_pending') || '[]');
     if (items.length === 0) { alert('No locally saved scans.'); return; }
     const lines = items.map((i, n) => `${n+1}. ${i.toteId} — ${i.action} — ${i.timestamp}`).join('\n');
@@ -1446,10 +1479,11 @@ function setMode(mode) {
   function selectComboOption(id, value, text) {
     const combo = searchableSelects[id];
     if (!combo) return;
-    combo.select.value = value;
+    combo.select.value = value;   // keeps existing id/value/validation intact
     combo.input.value = text;
     combo.panel.classList.remove('open');
     combo.highlighted = -1;
+    resetBatchScanCount(); // Location/MID, Driver, or Associate changed — re-verified, so let scanning continue
   }
 
   function syncComboDisplay(id) {
